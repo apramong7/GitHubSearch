@@ -1,10 +1,18 @@
+/**
+ * Profile.js
+ * This component represents the user profile screen displaying GitHub user details.
+ * It fetches user data from the GitHub API and stores it in cache for future use.
+ * Cached data is used if available to reduce API calls and improve performance.
+ */
+
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Card, Icon } from '@rneui/themed';
-import { useRoute } from '@react-navigation/native';
+import { useRoute, useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export default function Profile({ data, navigation }) {
+export default function Profile({ data }) {
   const [name, setName] = useState('');
   const [userName, setUserName] = useState('');
   const [followers, setFollowers] = useState('');
@@ -13,29 +21,49 @@ export default function Profile({ data, navigation }) {
   const [avatar, setAvatar] = useState('');
   const [error, setError] = useState(null);
 
+  // Hooks for navigation and route
   const route = useRoute();
+  const navigation = useNavigation();
   const { username } = route.params;
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        fetch(`https://api.github.com/users/${username}`)
-          .then((res) => res.json())
-          .then((data) => {
-            setData(data);
-            setLoading(false);
-            setError(null);
-          });
-      } catch (error) {
+    // Check if profile data is available in cache
+    getCachedProfileData(username)
+      .then((cachedData) => {
+        if (cachedData) {
+          // If cached data is available, use it
+          setData(cachedData);
+        } else {
+          // If cached data is not available, fetch from API and store in cache
+          fetchUserData();
+        }
+      })
+      .catch((error) => {
         setError('Error fetching user data');
         setLoading(false);
-      }
-    };
-
-    fetchUserData();
+      });
   }, [username]);
 
+   // Function to fetch user data from the GitHub API
+  const fetchUserData = async () => {
+    try {
+      fetch(`https://api.github.com/users/${username}`)
+        .then((res) => res.json())
+        .then((data) => {
+          setData(data);
+          setLoading(false);
+          setError(null);
+          // Store the data in cache
+          cacheProfileData(username, data);
+        });
+    } catch (error) {
+      setError('Error fetching user data');
+      setLoading(false);
+    }
+  };
+
+  // Function to set user data to state
   const setData = ({
     name,
     login,
@@ -52,6 +80,27 @@ export default function Profile({ data, navigation }) {
     setAvatar(avatar_url);
   };
 
+  // Function to get cached profile data from AsyncStorage
+  const getCachedProfileData = async (username) => {
+    try {
+      const cachedData = await AsyncStorage.getItem(`profile_${username}`);
+      return JSON.parse(cachedData);
+    } catch (error) {
+      console.log('Error retrieving cached data:', error);
+      return null;
+    }
+  };
+
+  // Function to cache profile data in AsyncStorage
+  const cacheProfileData = async (username, data) => {
+    try {
+      const jsonData = JSON.stringify(data);
+      await AsyncStorage.setItem(`profile_${username}`, jsonData);
+    } catch (error) {
+      console.log('Error caching data:', error);
+    }
+  };
+
   return (
     <SafeAreaProvider>
       {error ? (
@@ -60,7 +109,16 @@ export default function Profile({ data, navigation }) {
         <View style={styles.container}>
           <Card>
             <View style={styles.avatarContainer}>
-              <Image style={styles.avatar} source={{ uri: avatar }} />
+              {avatar ? (
+                <Image style={styles.avatar} source={{ uri: avatar }} />
+              ) : (
+                <View style={styles.placeholderContainer}>
+                  <Image
+                    style={styles.placeholder}
+                    source={require('../images/placeholder.png')}
+                  />
+                </View>
+              )}
             </View>
             <View style={styles.textContainer}>
               <Card.Title>{userName}</Card.Title>
@@ -77,7 +135,7 @@ export default function Profile({ data, navigation }) {
                   <Icon
                     name='user-friends'
                     type='font-awesome-5'
-                    color='#517fa4'
+                    color='#542617'
                   />
                   <Text style={styles.countText}>{followers} Followers</Text>
                 </View>
@@ -89,7 +147,7 @@ export default function Profile({ data, navigation }) {
                   <Icon
                     name='users'
                     type='font-awesome-5'
-                    color='#517fa4'
+                    color='#542617'
                   />
                   <Text style={styles.countText}>{following} Following</Text>
                 </View>
@@ -106,7 +164,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    backgroundColor: '#f8f8f8',
+    backgroundColor: '#f7f3f0',
   },
   cardContainer: {
     flexDirection: 'row',
